@@ -7,12 +7,23 @@ using Distributions
 using Plots
 using ProgressMeter
 
+function snapshot(a::Animation, θlive_s::Matrix{Float64}, logℓ_s::Vector{Float64}, 
+                  xlims::Tuple{Float64,Float64}, ylims::Tuple{Float64,Float64}, contour::Bool)
+    plt = scatter(θlive_s[1, :], θlive_s[2, :], marker_z=logℓ_s, xlims=xlims, ylims=xlims)
+    if contour    
+        contour!(plt, range(xlims[1], xlims[2], length=200), range(ylims[1], ylims[2], length=200), logℓ)
+    end        
+    frame(a, plt)
+end
+
 function main()
+    # Plotting settings
     show = true
     contour = true
     if show
         a = Animation()
     end
+
     # Initialise volume and evidence
     X = 1.
     Z = 0.
@@ -21,7 +32,6 @@ function main()
     Xd = Beta(nlive, 1)
 
     # Initialise strage arrays
-
     volumes = [X]
     evidence = [Z]
     critical = []
@@ -31,13 +41,8 @@ function main()
     θlive_s = rand(πd, nlive)
     logℓ_s = logℓ(θlive_s)
     if show
-        plt = scatter(θlive_s[1, :], θlive_s[2, :], marker_z=logℓ_s, xlims=(-5., 5.), ylims=(-5., 5.))
-        if contour    
-            contour!(plt, range(-5., 5., length=200), range(-5., 5., length=200), logℓ)
-        end        
-        frame(a, plt)
+        snapshot(a, θlive_s, logℓ_s, (-5., 5.), (-5., 5.), contour)
     end
-
 
     # Sort arrays by the value of the log likelihood
     order = sortperm(logℓ_s)
@@ -93,20 +98,25 @@ function main()
     θlive_s = hcat(θlive_s, θlive)
     logℓ_s = append!(logℓ_s, logℓ(θlive))
     println("[nestjl.jl] Completed first pass")
-    p = Progress(niter; showspeed=true)
+    p = Progress(niter, 
+                 barglyphs=BarGlyphs('|','█', ['▁' ,'▂' ,'▃' ,'▄' ,'▅' ,'▆', '▇'],' ','|',),
+                 barlen=25; 
+                 showspeed=true)
 
+    # Allow for early stopping when running in -i mode
+    try
     for it in 1:niter
-        next!(p; showvalues=[(:Iteration, it)])
+        next!(p, showvalues=[(:Iteration, it),
+                             (:X, X),
+                             (:Z, Z),
+                             (:logℓ, logℓ_star),
+                             (:SearchPts, counter)])
         # Sort arrays by the value of the log likelihood
         order = sortperm(logℓ_s)
         θlive_s = θlive_s[:, order]
         logℓ_s = logℓ_s[order]
         if show
-            plt = scatter(θlive_s[1, :], θlive_s[2, :], marker_z=logℓ_s, xlims=(-5., 5.), ylims=(-5., 5.))
-            if contour    
-                contour!(plt, range(-5., 5., length=200), range(-5., 5., length=200), logℓ)
-            end
-            frame(a, plt)
+            snapshot(a, θlive_s, logℓ_s, (-5., 5.), (-5., 5.), contour)
         end
 
         # Obtain critical value and drop dead points
@@ -157,13 +167,22 @@ function main()
         θlive_s = hcat(θlive_s, θlive)
         logℓ_s = append!(logℓ_s, logℓ(θlive))
     end
+
     if show
         gif(a, gifname)
     end
-    println("Z = ", Z)
-    return Z, volumes, evidence, critical, live_point_time
+    println("[nestjl.jl] Z = ", Z)
+    return Z, volumes, evidence, critical, live_point_time, θdead_s
+
+    catch InterruptException
+    if show
+        gif(a, gifname)
+    end
+    println("[nestjl.jl] Z = ", Z)
+    return Z, volumes, evidence, critical, live_point_time, θdead_s
+    end
 end
  
 if abspath(PROGRAM_FILE) == @__FILE__
-    Z, volumes, evidence, critical, live_point_time = main()
+    Z, volumes, evidence, critical, live_point_time, θdead_s = main()
 end

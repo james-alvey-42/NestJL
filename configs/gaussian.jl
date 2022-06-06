@@ -5,8 +5,8 @@ using Distributions
 export nlive, niter, empirical_vol, ntest, πd, logℓ, gifname
 
 # Nested Sampler Settings
-nlive = 50
-niter = 200
+nlive = 100
+niter = 500
 
 # Volume settings
 empirical_vol = false
@@ -22,15 +22,17 @@ a = 5.
 # Log-likelihood
 
 function logℓ(θ1::Float64, θ2::Float64)
-    return -(θ1^2 + θ2 ^ 2)
+    return -((θ1 - 1.) ^2 + (θ2 - 1.) ^2)
 end
 function logℓ(θ::Vector{Float64})
-    return -sum(θ .^ 2)
+    return -sum((θ .- 1.) .^ 2)
 end
 function logℓ(θsample::Matrix{Float64})
     return logℓ.([θsample[:, i] for i in 1:size(θsample)[2]])
 end
 
 gifname = "../gifs/gaussian.gif"
+
+println("[gaussian.jl] Sucessfully loaded config file")
 
 end
